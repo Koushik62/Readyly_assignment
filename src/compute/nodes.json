@@ -1,0 +1,72 @@
+[
+    {
+        "id": "node_1",
+        "type": "imageNode",
+        "position": {
+            "x": 645.1236895569446,
+            "y": 94.57883315625298
+        },
+        "data": {
+            "label": "ImageNode Node 2",
+            "imageUrl": "/static/media/logo_1.7a8330899dad0666b460.png"
+        }
+    },
+    {
+        "id": "node_2",
+        "type": "circular",
+        "position": {
+            "x": 640.7002379695705,
+            "y": 279.16713890939025
+        },
+        "data": {
+            "label": "Circular Node 3"
+        }
+    },
+    {
+        "id": "node_3",
+        "type": "imageNode",
+        "position": {
+            "x": 424.10626972651437,
+            "y": 458.66262363499476
+        },
+        "data": {
+            "label": "ImageNode Node 4",
+            "imageUrl": "/static/media/logo_1.7a8330899dad0666b460.png"
+        }
+    },
+    {
+        "id": "node_4",
+        "type": "imageNode",
+        "position": {
+            "x": 716.236959558205,
+            "y": 454.33140071942387
+        },
+        "data": {
+            "label": "ImageNode Node 5",
+            "imageUrl": "/static/media/logo_1.7a8330899dad0666b460.png"
+        }
+    },
+    {
+        "id": "node_6",
+        "type": "circular",
+        "position": {
+            "x": 607.8523117641485,
+            "y": 717.499942218094
+        },
+        "data": {
+            "label": "Circular Node 7"
+        }
+    },
+    {
+        "id": "node_7",
+        "type": "imageNode",
+        "position": {
+            "x": 597.9939443938102,
+            "y": 901.4679079146239
+        },
+        "data": {
+            "label": "ImageNode Node 8",
+            "imageUrl": "/static/media/logo_1.7a8330899dad0666b460.png"
+        }
+    }
+]

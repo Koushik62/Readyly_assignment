@@ -1,0 +1,44 @@
+[
+    {
+        "id": "enode_1-node_2",
+        "source": "node_1",
+        "sourceHandle": null,
+        "target": "node_2",
+        "targetHandle": null
+    },
+    {
+        "id": "enode_2-node_3",
+        "source": "node_2",
+        "sourceHandle": null,
+        "target": "node_3",
+        "targetHandle": null
+    },
+    {
+        "id": "enode_2-node_4",
+        "source": "node_2",
+        "sourceHandle": null,
+        "target": "node_4",
+        "targetHandle": null
+    },
+    {
+        "id": "enode_3-node_6",
+        "source": "node_3",
+        "sourceHandle": null,
+        "target": "node_6",
+        "targetHandle": null
+    },
+    {
+        "id": "enode_4-node_6",
+        "source": "node_4",
+        "sourceHandle": null,
+        "target": "node_6",
+        "targetHandle": null
+    },
+    {
+        "id": "enode_6-node_7",
+        "source": "node_6",
+        "sourceHandle": null,
+        "target": "node_7",
+        "targetHandle": null
+    }
+]
