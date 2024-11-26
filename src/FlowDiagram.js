@@ -195,19 +195,77 @@ const FlowDiagram = () => {
     
   }, [nodes, edges, pushToHistory]);
 
+  // const makeNodesEquispacedAndCentered = useCallback(() => {
+  //   if (!reactFlowWrapper.current) return;
+  //   const spacing = 100; // Vertical spacing between nodes
+  //   const containerWidth = reactFlowWrapper.current.offsetWidth;
+  //   const centerX = containerWidth / 2;
+  //   const updatedNodes = nodes.map((node, index) => ({
+  //     ...node,
+  //     position: { x: centerX - 50, y: index * spacing + 100 }
+  //   }));
+  //   pushToHistory(updatedNodes, edges);
+  //   setNodes(updatedNodes);
+  //   console.log(updatedNodes)
+  // }, [nodes, edges, pushToHistory]);
+
   const makeNodesEquispacedAndCentered = useCallback(() => {
     if (!reactFlowWrapper.current) return;
-    const spacing = 100; // Vertical spacing between nodes
+  
+    const spacingX = 200; // Horizontal spacing between child nodes
+    const spacingY = 250; // Vertical spacing between levels
     const containerWidth = reactFlowWrapper.current.offsetWidth;
     const centerX = containerWidth / 2;
-    const updatedNodes = nodes.map((node, index) => ({
-      ...node,
-      position: { x: centerX - 50, y: index * spacing + 100 }
-    }));
+  
+    // Helper function to get children of a node
+    const getChildren = (parentId) => {
+      return edges
+        .filter((edge) => edge.source === parentId)
+        .map((edge) => nodes.find((node) => node.id === edge.target));
+    };
+  
+    // Recursive function to position nodes
+    const positionNode = (node, level, xOffset) => {
+      const children = getChildren(node.id);
+      const numChildren = children.length;
+  
+      // Calculate position for current node
+      const nodeX = centerX + xOffset;
+      const nodeY = level * spacingY;
+  
+      updatedNodes.push({
+        ...node,
+        position: { x: nodeX, y: nodeY },
+      });
+  
+      if (numChildren > 0) {
+        // Calculate total width required for children
+        const totalWidth = (numChildren - 1) * spacingX;
+  
+        // Recursively position children
+        children.forEach((child, index) => {
+          const childOffset = xOffset + index * spacingX - totalWidth / 2;
+          positionNode(child, level + 1, childOffset);
+        });
+      }
+    };
+  
+    const updatedNodes = [];
+    const rootNodes = nodes.filter(
+      (node) => !edges.some((edge) => edge.target === node.id)
+    );
+  
+    // Position all root nodes and their children
+    rootNodes.forEach((rootNode, index) => {
+      positionNode(rootNode, 0, (index - rootNodes.length / 2) * spacingX * 2);
+    });
+  
     pushToHistory(updatedNodes, edges);
     setNodes(updatedNodes);
-    console.log(updatedNodes)
+    console.log(updatedNodes);
   }, [nodes, edges, pushToHistory]);
+  
+  
 
   const undo = useCallback(() => {
     if (currentHistoryIndex === 0) return;

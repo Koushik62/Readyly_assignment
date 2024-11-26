@@ -34,7 +34,7 @@ export const FlowProvider = ({ children }) => {
   };
 
   return (
-    <FlowContext.Provider value={{ nodes, edges, addNode,setNodes, deleteNode, setEdges,
+    <FlowContext.Provider value={{  nodes, edges, addNode,setNodes, deleteNode, setEdges,
       history, setHistory, currentHistoryIndex, setCurrentHistoryIndex
     }}>
       {children}
