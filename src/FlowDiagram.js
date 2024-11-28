@@ -44,70 +44,102 @@ const FlowDiagram = () => {
     setNodes(newNodes);
   }, [nodes, edges, pushToHistory]);
 
+  const branchTracker = useRef({}); // { nodeId: { parent: parentId, branchId: "2.3.1" } });
+  const circularNodesIdx = useRef(0); // Ensures unique branch IDs globally
 
-  const onConnect = useCallback((params) => {
-    const { source, target } = params;
-    const sourceNode = nodes.find((n) => n.id === source);
-    const targetNode = nodes.find((n) => n.id === target);
+  const onConnect = useCallback(
+    (params) => {
+      const { source, target } = params;
   
-    // Validate the connection
-    if (shouldPreventConnection(sourceNode, targetNode, edges, nodes)) {
-      return;
-    }
+      const sourceNode = nodes.find((n) => n.id === source);
+      const targetNode = nodes.find((n) => n.id === target);
   
-    let updatedNodes = [...nodes];
-    let branchId = sourceNode.data?.branch;
-  
-    // If connecting from a circular node, create new parallel structure
-    if (sourceNode.type === 'circular' && !sourceNode.data?.branch) {
-      branchId = `parallel_${source}_${Date.now()}`;
-      
-      // Update the circular node with branch information
-      updatedNodes = updatedNodes.map(node =>
-        node.id === source ? {
-          ...node,
-          data: {
-            ...node.data,
-            branch: branchId,
-            isParallel: true
-          }
-        } : node
-      );
-    }
-  
-    // Update target node with parallel information
-    if (branchId) {
-      updatedNodes = updatedNodes.map(node =>
-        node.id === target ? {
-          ...node,
-          data: {
-            ...node.data,
-            branch: branchId,
-            isParallel: true
-          }
-        } : node
-      );
-    }
-  
-    // Add the edge with parallel information
-    setNodes(updatedNodes);
-    setEdges(eds => [...eds, {
-      id: `e${source}-${target}`,
-      ...params,
-      data: { 
-        branch: branchId,
-        isParallel: true
+      // Validate the connection
+      if (shouldPreventConnection(sourceNode, targetNode, edges, nodes)) {
+        return;
       }
-    }]);
   
-  }, [nodes, edges, setNodes, setEdges]);
-
+      let updatedNodes = [...nodes];
+  
+      // Determine the source node's branch ID
+      if (!branchTracker.current[source] && sourceNode.type === 'circular') {
+        // If source node has no branch, assign it a root branch
+        branchTracker.current[source] = { parent: null, branchId: `${circularNodesIdx.current}` };
+        circularNodesIdx.current+=1;
+      }
+  
+      const sourceBranchId = branchTracker.current[source].branchId;
+  
+      // Construct the target node's branch ID based on the source
+      let newBranchId = sourceBranchId;
+      if (!branchTracker.current[target]) {
+        // Count children of the source to determine the next number in the hierarchy
+        const siblingCount = Object.values(branchTracker.current).filter(
+          (entry) => entry.parent === source
+        ).length;
+  
+        newBranchId = `${sourceBranchId}.${siblingCount + 1}`;
+  
+        // Assign the new branch ID and track the parent-child relationship
+        branchTracker.current[target] = { parent: source, branchId: newBranchId };
+      }
+  
+      // Update the source and target node labels
+      updatedNodes = updatedNodes.map((node) => {
+        if (node.id === source) {
+          if(targetNode.type === 'circular'){
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                branch: `${sourceBranchId}`,
+                label: `Parallel end ${sourceBranchId}`,
+              },
+            };
+          }
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              branch: `${sourceBranchId}`,
+            },
+          };
+        } else if (node.id === target) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              branch: `${newBranchId}`, // Update target node label
+            },
+          };
+        }
+        return node;
+      });
+  
+      // Add the new edge
+      setNodes(updatedNodes);
+      setEdges((eds) => [
+        ...eds,
+        {
+          id: `e${source}-${target}`,
+          ...params,
+          data: { branch: newBranchId },
+        },
+      ]);
+  
+      console.log("Branch Tracker:", branchTracker.current); // Debugging output
+    },
+    [nodes, edges, setNodes, setEdges]
+  );
+  
   function shouldPreventConnection(sourceNode, targetNode, edges, nodes) {
     // Helper to get node's outdegree only since we don't need indegree
     function getNodeOutdegree(nodeId) {
       return edges.filter(edge => edge.source === nodeId).length;
     }
-  
+    function getNodeIndegree(nodeId) {
+      return edges.filter(edge => edge.target === nodeId).length;
+    }
     // Helper to get branch hierarchy level (e.g., 1.1, 1.1.1)
     function getBranchLevel(nodeId) {
       const node = nodes.find(n => n.id === nodeId);
@@ -131,19 +163,19 @@ const FlowDiagram = () => {
       return level;
     }
   
-    // Helper to check if nodes are in the same parallel branch
-    function areInSameBranch(node1Id, node2Id) {
-      const node1 = nodes.find(n => n.id === node1Id);
-      const node2 = nodes.find(n => n.id === node2Id);
+    // // Helper to check if nodes are in the same parallel branch
+    // function areInSameBranch(node1Id, node2Id) {
+    //   const node1 = nodes.find(n => n.id === node1Id);
+    //   const node2 = nodes.find(n => n.id === node2Id);
       
-      if (!node1?.data?.branch || !node2?.data?.branch) return false;
-      return node1.data.branch === node2.data.branch;
-    }
+    //   if (!node1?.data?.branch || !node2?.data?.branch) return false;
+    //   return node1.data.branch === node2.data.branch;
+    // }
   
     // Helper to check if target node already has connections
-    function hasExistingConnections(nodeId) {
-      return edges.some(edge => edge.target === nodeId);
-    }
+    // function hasExistingConnections(nodeId) {
+    //   return edges.some(edge => edge.target === nodeId);
+    // }
 
     // Rule 1: Prevent loops (Moved this check to be first)
     const visited = new Set();
@@ -161,47 +193,60 @@ const FlowDiagram = () => {
       alert("Cannot create a loop in the flow.");
       return true;
     }
-  
-    // Rule 2: Connection type validation based on node type
-    if (sourceNode.type === 'circular') {
-      // For circular nodes, ensure target isn't already connected from a different branch
-      if (hasExistingConnections(targetNode.id) && !areInSameBranch(sourceNode.id, targetNode.id)) {
-        alert("Target node already has a connection from a different branch.");
-        return true;
-      }
-    } else {
-      // Non-circular nodes can only have one outgoing connection
-      if (getNodeOutdegree(sourceNode.id) > 0) {
-        alert("Parallel branches can't be connected.");
-        return true;
-      }
+
+    // Rule 2: Non circular node should have a single incoming edge
+    if (targetNode.type !== 'circular' && getNodeIndegree(targetNode.id) > 0) {
+      alert("Non-circular nodes can only have one incoming connection.");
+      return true;
     }
+
+    // Rule 3: Source and target cannot be circular
+    if (sourceNode.type === 'circular' && targetNode.type === 'circular') { 
+      alert("Cannot connect two circular nodes.");
+      return true;
+    }
+  
+
+    // if (sourceNode.type === 'circular') {
+    //   // For circular nodes, ensure target isn't already connected from a different branch
+    //   if (hasExistingConnections(targetNode.id) && !areInSameBranch(sourceNode.id, targetNode.id)) {
+    //     alert("Target node already has a connection from a different branch.");
+    //     return true;
+    //   }
+    // } 
+    // else {
+    //   // Non-circular nodes can only have one outgoing connection
+    //   if (getNodeOutdegree(sourceNode.id) > 0) {
+    //     alert("Parallel branches can't be connected.");
+    //     return true;
+    //   }
+    // }
   
     // Rule 3: Branch hierarchy validation
     const sourceLevel = getBranchLevel(sourceNode.id);
     const targetLevel = getBranchLevel(targetNode.id);
     
-    if (sourceLevel && targetLevel) {
-      if (sourceLevel !== targetLevel && targetNode.type !== 'circular') {
-        alert("Cannot connect nodes from different branch levels.");
-        return true;
-      }
-    }
+    // if (sourceLevel && targetLevel) {
+    //   if (sourceLevel !== targetLevel && targetNode.type !== 'circular') {
+    //     alert("Cannot connect nodes from different branch levels.");
+    //     return true;
+    //   }
+    // }
   
     // Rule 4: Convergence point validation
-    if (targetNode.type === 'circular') {
-      const incomingNodes = edges
-        .filter(e => e.target === targetNode.id)
-        .map(e => nodes.find(n => n.id === e.source));
+    // if (targetNode.type === 'circular') {
+    //   const incomingNodes = edges
+    //     .filter(e => e.target === targetNode.id)
+    //     .map(e => nodes.find(n => n.id === e.source));
       
-      if (incomingNodes.length > 0) {
-        const firstBranch = incomingNodes[0]?.data?.branch;
-        if (!incomingNodes.every(n => n?.data?.branch === firstBranch)) {
-          alert("All incoming connections to a convergence point must be from the same branch.");
-          return true;
-        }
-      }
-    }
+    //   if (incomingNodes.length > 0) {
+    //     const firstBranch = incomingNodes[0]?.data?.branch;
+    //     if (!incomingNodes.every(n => n?.data?.branch === firstBranch)) {
+    //       alert("All incoming connections to a convergence point must be from the same branch.");
+    //       return true;
+    //     }
+    //   }
+    // }
   
     return false;
 }
@@ -253,8 +298,8 @@ const FlowDiagram = () => {
   const makeNodesEquispacedAndCentered = useCallback(() => {
     if (!reactFlowWrapper.current) return;
   
-    const spacingX = 200; // Horizontal spacing between child nodes
-    const spacingY = 250; // Vertical spacing between levels
+    const spacingX = 200;
+    const spacingY = 250;
     const containerWidth = reactFlowWrapper.current.offsetWidth;
     const centerX = containerWidth / 2;
   
@@ -264,14 +309,21 @@ const FlowDiagram = () => {
         .filter((edge) => edge.source === parentId)
         .map((edge) => nodes.find((node) => node.id === edge.target));
     };
+
+    // Get all leaf nodes in a subtree
+    const getLeafNodes = (node) => {
+      const children = getChildren(node.id);
+      if (children.length === 0) return 1;
+      return children.reduce((sum, child) => sum + getLeafNodes(child), 0);
+    };
   
     // Recursive function to position nodes
-    const positionNode = (node, level, xOffset) => {
+    const positionNode = (node, level, startX, width) => {
       const children = getChildren(node.id);
       const numChildren = children.length;
-  
+      
       // Calculate position for current node
-      const nodeX = centerX + xOffset;
+      const nodeX = startX + width / 2;
       const nodeY = level * spacingY;
   
       updatedNodes.push({
@@ -280,13 +332,13 @@ const FlowDiagram = () => {
       });
   
       if (numChildren > 0) {
-        // Calculate total width required for children
-        const totalWidth = (numChildren - 1) * spacingX;
-  
-        // Recursively position children
-        children.forEach((child, index) => {
-          const childOffset = xOffset + index * spacingX - totalWidth / 2;
-          positionNode(child, level + 1, childOffset);
+        let currentX = startX;
+        children.forEach((child) => {
+          // Calculate width based on number of leaf nodes in subtree
+          const childLeaves = getLeafNodes(child);
+          const childWidth = childLeaves * spacingX;
+          positionNode(child, level + 1, currentX, childWidth);
+          currentX += childWidth;
         });
       }
     };
@@ -295,17 +347,23 @@ const FlowDiagram = () => {
     const rootNodes = nodes.filter(
       (node) => !edges.some((edge) => edge.target === node.id)
     );
-  
+    
+    // Calculate total width needed based on all leaf nodes
+    const totalLeaves = rootNodes.reduce((sum, root) => sum + getLeafNodes(root), 0);
+    const totalWidth = totalLeaves * spacingX;
+    let currentX = centerX - totalWidth / 2;
+    
     // Position all root nodes and their children
-    rootNodes.forEach((rootNode, index) => {
-      positionNode(rootNode, 0, (index - rootNodes.length / 2) * spacingX * 2);
+    rootNodes.forEach((rootNode) => {
+      const rootLeaves = getLeafNodes(rootNode);
+      const rootWidth = rootLeaves * spacingX;
+      positionNode(rootNode, 0, currentX, rootWidth);
+      currentX += rootWidth;
     });
   
     pushToHistory(updatedNodes, edges);
     setNodes(updatedNodes);
-    console.log(updatedNodes);
-  }, [nodes, edges, pushToHistory]);
-  
+}, [nodes, edges, pushToHistory]);
   
 
   const undo = useCallback(() => {
