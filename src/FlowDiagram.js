@@ -310,61 +310,54 @@ const FlowDiagram = () => {
         .map((edge) => nodes.find((node) => node.id === edge.target));
     };
 
-    // Get all leaf nodes in a subtree
-    const getLeafNodes = (node) => {
-      const children = getChildren(node.id);
-      if (children.length === 0) return 1;
-      return children.reduce((sum, child) => sum + getLeafNodes(child), 0);
-    };
-  
-    // Recursive function to position nodes
-    const positionNode = (node, level, startX, width) => {
-      const children = getChildren(node.id);
-      const numChildren = children.length;
-      
-      // Calculate position for current node
-      const nodeX = startX + width / 2;
-      const nodeY = level * spacingY;
-  
-      updatedNodes.push({
-        ...node,
-        position: { x: nodeX, y: nodeY },
-      });
-  
-      if (numChildren > 0) {
-        let currentX = startX;
-        children.forEach((child) => {
-          // Calculate width based on number of leaf nodes in subtree
-          const childLeaves = getLeafNodes(child);
-          const childWidth = childLeaves * spacingX;
-          positionNode(child, level + 1, currentX, childWidth);
-          currentX += childWidth;
-        });
-      }
+    // Helper function to get parents of a node
+    const getParents = (nodeId) => {
+      return edges
+        .filter((edge) => edge.target === nodeId)
+        .map((edge) => nodes.find((node) => node.id === edge.source));
     };
   
     const updatedNodes = [];
-    const rootNodes = nodes.filter(
-      (node) => !edges.some((edge) => edge.target === node.id)
-    );
     
-    // Calculate total width needed based on all leaf nodes
-    const totalLeaves = rootNodes.reduce((sum, root) => sum + getLeafNodes(root), 0);
-    const totalWidth = totalLeaves * spacingX;
-    let currentX = centerX - totalWidth / 2;
+    // Find nodes at each level
+    const getLevels = () => {
+      const levels = [];
+      let currentNodes = nodes.filter(
+        (node) => !edges.some((edge) => edge.target === node.id)
+      );
+      
+      while (currentNodes.length > 0) {
+        levels.push(currentNodes);
+        currentNodes = currentNodes
+          .flatMap((node) => getChildren(node.id))
+          .filter((node, index, self) => 
+            self.findIndex(n => n.id === node.id) === index
+          );
+      }
+      return levels;
+    };
+
+    const levels = getLevels();
     
-    // Position all root nodes and their children
-    rootNodes.forEach((rootNode) => {
-      const rootLeaves = getLeafNodes(rootNode);
-      const rootWidth = rootLeaves * spacingX;
-      positionNode(rootNode, 0, currentX, rootWidth);
-      currentX += rootWidth;
+    // Position nodes level by level
+    levels.forEach((levelNodes, levelIndex) => {
+      const levelWidth = (levelNodes.length - 1) * spacingX;
+      const startX = centerX - levelWidth / 2;
+      
+      levelNodes.forEach((node, nodeIndex) => {
+        updatedNodes.push({
+          ...node,
+          position: {
+            x: startX + nodeIndex * spacingX,
+            y: levelIndex * spacingY
+          }
+        });
+      });
     });
   
     pushToHistory(updatedNodes, edges);
     setNodes(updatedNodes);
 }, [nodes, edges, pushToHistory]);
-  
 
   const undo = useCallback(() => {
     if (currentHistoryIndex === 0) return;
