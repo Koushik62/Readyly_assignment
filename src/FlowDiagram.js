@@ -151,6 +151,15 @@ const FlowDiagram = () => {
       return parentNode?.type === 'circular';
     }
   
+    // Helper to check if node is already connected to a circular node as output
+    function hasCircularOutput(nodeId) {
+      const outgoingEdges = edges.filter(edge => edge.source === nodeId);
+      return outgoingEdges.some(edge => {
+        const targetNode = nodes.find(node => node.id === edge.target);
+        return targetNode?.type === 'circular';
+      });
+    }
+  
     // Rule 1: Prevent loops
     const visited = new Set();
     function hasLoop(currentId, targetId) {
@@ -186,6 +195,18 @@ const FlowDiagram = () => {
         alert("Node must have a circular parent to connect to another circular node.");
         return true;
       }
+    }
+  
+    // Rule 5: Prevent divergence from image nodes (multiple outgoing connections)
+    if (sourceNode.type === 'imageNode' && getNodeOutdegree(sourceNode.id) > 0) {
+      alert("Image nodes cannot have multiple outgoing connections.");
+      return true;
+    }
+  
+    // Rule 6: If image node is already connected to a circular node as output, prevent new connections
+    if (sourceNode.type === 'imageNode' && hasCircularOutput(sourceNode.id)) {
+      alert("Image node is already connected to a parallel node as output.");
+      return true;
     }
   
     return false;
