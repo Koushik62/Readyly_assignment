@@ -133,51 +133,25 @@ const FlowDiagram = () => {
   );
   
   function shouldPreventConnection(sourceNode, targetNode, edges, nodes) {
-    // Helper to get node's outdegree only since we don't need indegree
+    // Helper to get node's outdegree
     function getNodeOutdegree(nodeId) {
       return edges.filter(edge => edge.source === nodeId).length;
     }
+    
     function getNodeIndegree(nodeId) {
       return edges.filter(edge => edge.target === nodeId).length;
     }
-    // Helper to get branch hierarchy level (e.g., 1.1, 1.1.1)
-    function getBranchLevel(nodeId) {
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node?.data?.branch) return null;
+  
+    // Helper to check if a node has a circular parent
+    function hasCircularParent(nodeId) {
+      const parentEdges = edges.filter(edge => edge.target === nodeId);
+      if (parentEdges.length === 0) return false;
       
-      let level = 1;
-      let currentNode = node;
-      let visited = new Set();
-      
-      while (currentNode && !visited.has(currentNode.id)) {
-        visited.add(currentNode.id);
-        const parentEdge = edges.find(e => e.target === currentNode.id);
-        if (parentEdge) {
-          const parentNode = nodes.find(n => n.id === parentEdge.source);
-          if (parentNode?.type === 'circular') level++;
-          currentNode = parentNode;
-        } else {
-          break;
-        }
-      }
-      return level;
+      const parentNode = nodes.find(node => node.id === parentEdges[0].source);
+      return parentNode?.type === 'circular';
     }
   
-    // // Helper to check if nodes are in the same parallel branch
-    // function areInSameBranch(node1Id, node2Id) {
-    //   const node1 = nodes.find(n => n.id === node1Id);
-    //   const node2 = nodes.find(n => n.id === node2Id);
-      
-    //   if (!node1?.data?.branch || !node2?.data?.branch) return false;
-    //   return node1.data.branch === node2.data.branch;
-    // }
-  
-    // Helper to check if target node already has connections
-    // function hasExistingConnections(nodeId) {
-    //   return edges.some(edge => edge.target === nodeId);
-    // }
-
-    // Rule 1: Prevent loops (Moved this check to be first)
+    // Rule 1: Prevent loops
     const visited = new Set();
     function hasLoop(currentId, targetId) {
       if (currentId === targetId) return true;
@@ -188,68 +162,34 @@ const FlowDiagram = () => {
         .filter(e => e.source === currentId)
         .some(e => hasLoop(e.target, targetId));
     }
-  
+    
     if (hasLoop(targetNode.id, sourceNode.id)) {
       alert("Cannot create a loop in the flow.");
       return true;
     }
-
+  
     // Rule 2: Non circular node should have a single incoming edge
     if (targetNode.type !== 'circular' && getNodeIndegree(targetNode.id) > 0) {
       alert("Non-circular nodes can only have one incoming connection.");
       return true;
     }
-
-    // Rule 3: Source and target cannot be circular
+  
+    // Rule 3: Source and target cannot both be circular
     if (sourceNode.type === 'circular' && targetNode.type === 'circular') { 
       alert("Cannot connect two circular nodes.");
       return true;
     }
   
-
-    // if (sourceNode.type === 'circular') {
-    //   // For circular nodes, ensure target isn't already connected from a different branch
-    //   if (hasExistingConnections(targetNode.id) && !areInSameBranch(sourceNode.id, targetNode.id)) {
-    //     alert("Target node already has a connection from a different branch.");
-    //     return true;
-    //   }
-    // } 
-    // else {
-    //   // Non-circular nodes can only have one outgoing connection
-    //   if (getNodeOutdegree(sourceNode.id) > 0) {
-    //     alert("Parallel branches can't be connected.");
-    //     return true;
-    //   }
-    // }
-  
-    // Rule 3: Branch hierarchy validation
-    const sourceLevel = getBranchLevel(sourceNode.id);
-    const targetLevel = getBranchLevel(targetNode.id);
-    
-    // if (sourceLevel && targetLevel) {
-    //   if (sourceLevel !== targetLevel && targetNode.type !== 'circular') {
-    //     alert("Cannot connect nodes from different branch levels.");
-    //     return true;
-    //   }
-    // }
-  
-    // Rule 4: Convergence point validation
-    // if (targetNode.type === 'circular') {
-    //   const incomingNodes = edges
-    //     .filter(e => e.target === targetNode.id)
-    //     .map(e => nodes.find(n => n.id === e.source));
-      
-    //   if (incomingNodes.length > 0) {
-    //     const firstBranch = incomingNodes[0]?.data?.branch;
-    //     if (!incomingNodes.every(n => n?.data?.branch === firstBranch)) {
-    //       alert("All incoming connections to a convergence point must be from the same branch.");
-    //       return true;
-    //     }
-    //   }
-    // }
+    // Rule 4: Non-circular nodes can only connect to circular nodes if they have a circular parent
+    if (sourceNode.type !== 'circular' && targetNode.type === 'circular') {
+      if (!hasCircularParent(sourceNode.id)) {
+        alert("Node must have a circular parent to connect to another circular node.");
+        return true;
+      }
+    }
   
     return false;
-}
+  }
   function isEndOfParallelBranch(sourceNode, targetNode, edges) {
     // Rule 1: Check if the source node has multiple outgoing edges (parallel paths)
     const outgoingEdges = edges.filter((edge) => edge.source === sourceNode.id);
