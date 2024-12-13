@@ -47,90 +47,137 @@ const FlowDiagram = () => {
   const branchTracker = useRef({}); // { nodeId: { parent: parentId, branchId: "2.3.1" } });
   const circularNodesIdx = useRef(0); // Ensures unique branch IDs globally
 
-  const onConnect = useCallback(
-    (params) => {
-      const { source, target } = params;
-  
-      const sourceNode = nodes.find((n) => n.id === source);
-      const targetNode = nodes.find((n) => n.id === target);
-  
-      // Validate the connection
-      if (shouldPreventConnection(sourceNode, targetNode, edges, nodes)) {
-        return;
+  // Add this at component level
+const convergencePoints = useRef(new Map()); // Tracks points where branches converge
+const divergencePoints = useRef(new Map()); // Tracks points where branches diverge
+
+const onConnect = useCallback(
+  (params) => {
+    const { source, target } = params;
+
+    const sourceNode = nodes.find((n) => n.id === source);
+    const targetNode = nodes.find((n) => n.id === target);
+
+    // Validate the connection
+    if (shouldPreventConnection(sourceNode, targetNode, edges, nodes)) {
+      return;
+    }
+
+    let updatedNodes = [...nodes];
+
+    // Initialize branch tracking for root circular nodes
+    if (!branchTracker.current[source] && sourceNode.type === 'circular') {
+      branchTracker.current[source] = { parent: null, branchId: `${circularNodesIdx.current}` };
+      circularNodesIdx.current += 1;
+    }
+
+    const sourceBranchId = branchTracker.current[source]?.branchId;
+
+    // Track divergence from circular nodes
+    if (sourceNode.type === 'circular') {
+      if (!divergencePoints.current.has(source)) {
+        divergencePoints.current.set(source, {
+          parentBranch: sourceBranchId,
+          childCount: 1
+        });
+      } else {
+        const divergence = divergencePoints.current.get(source);
+        divergence.childCount += 1;
       }
-  
-      let updatedNodes = [...nodes];
-  
-      // Determine the source node's branch ID
-      if (!branchTracker.current[source] && sourceNode.type === 'circular') {
-        // If source node has no branch, assign it a root branch
-        branchTracker.current[source] = { parent: null, branchId: `${circularNodesIdx.current}` };
-        circularNodesIdx.current+=1;
-      }
-  
-      const sourceBranchId = branchTracker.current[source].branchId;
-  
-      // Construct the target node's branch ID based on the source
-      let newBranchId = sourceBranchId;
-      if (!branchTracker.current[target]) {
-        // Count children of the source to determine the next number in the hierarchy
-        const siblingCount = Object.values(branchTracker.current).filter(
-          (entry) => entry.parent === source
-        ).length;
-  
-        newBranchId = `${sourceBranchId}.${siblingCount + 1}`;
-  
-        // Assign the new branch ID and track the parent-child relationship
-        branchTracker.current[target] = { parent: source, branchId: newBranchId };
-      }
-  
-      // Update the source and target node labels
-      updatedNodes = updatedNodes.map((node) => {
-        if (node.id === source) {
-          if(targetNode.type === 'circular'){
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                branch: `${sourceBranchId}`,
-                label: `Parallel end ${sourceBranchId}`,
-              },
-            };
+    }
+
+    // Handle branch ID assignment
+    let newBranchId = sourceBranchId;
+    if (!branchTracker.current[target]) {
+      const divergence = divergencePoints.current.get(source);
+      if (divergence) {
+        // This is a diverging path
+        newBranchId = `${divergence.parentBranch}.${divergence.childCount}`;
+      } else {
+        // Check if this is a convergence point
+        const incomingEdges = edges.filter(e => e.target === source);
+        if (incomingEdges.length === 2 && sourceNode.type === 'circular') {
+          // This is a convergence point - get the common ancestor branch
+          const branch1 = branchTracker.current[incomingEdges[0].source]?.branchId;
+          const branch2 = branchTracker.current[incomingEdges[1].source]?.branchId;
+          if (branch1 && branch2) {
+            const commonPrefix = getCommonBranchPrefix(branch1, branch2);
+            newBranchId = commonPrefix;
+            convergencePoints.current.set(source, commonPrefix);
           }
+        }
+      }
+
+      branchTracker.current[target] = { parent: source, branchId: newBranchId };
+    }
+
+    // Update node labels
+    updatedNodes = updatedNodes.map((node) => {
+      if (node.id === source) {
+        if (targetNode.type === 'circular') {
           return {
             ...node,
             data: {
               ...node.data,
-              branch: `${sourceBranchId}`,
-            },
-          };
-        } else if (node.id === target) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              branch: `${newBranchId}`, // Update target node label
+              branch: sourceBranchId,
+              label: `Parallel end ${sourceBranchId}`,
             },
           };
         }
-        return node;
-      });
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            branch: sourceBranchId,
+          },
+        };
+      } else if (node.id === target) {
+        const convergencePoint = convergencePoints.current.get(source);
+        const branchToUse = convergencePoint || newBranchId;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            branch: branchToUse,
+          },
+        };
+      }
+      return node;
+    });
+
+    setNodes(updatedNodes);
+    setEdges((eds) => [
+      ...eds,
+      {
+        id: `e${source}-${target}`,
+        ...params,
+        data: { branch: newBranchId },
+      },
+    ]);
+  },
+  [nodes, edges, setNodes, setEdges]
+);
+
+// Helper function to get common branch prefix
+function getCommonBranchPrefix(branch1, branch2) {
+  const parts1 = branch1.split('.');
+  const parts2 = branch2.split('.');
   
-      // Add the new edge
-      setNodes(updatedNodes);
-      setEdges((eds) => [
-        ...eds,
-        {
-          id: `e${source}-${target}`,
-          ...params,
-          data: { branch: newBranchId },
-        },
-      ]);
+  // If they don't share the same root, return the first branch
+  if (parts1[0] !== parts2[0]) return branch1;
   
-      console.log("Branch Tracker:", branchTracker.current); // Debugging output
-    },
-    [nodes, edges, setNodes, setEdges]
-  );
+  // Find the point where they diverged and return the common part
+  let commonParts = [];
+  for (let i = 0; i < Math.min(parts1.length, parts2.length); i++) {
+    if (parts1[i] === parts2[i]) {
+      commonParts.push(parts1[i]);
+    } else {
+      break;
+    }
+  }
+  
+  return commonParts.join('.');
+}
   
   function shouldPreventConnection(sourceNode, targetNode, edges, nodes) {
     // Helper to get node's outdegree
@@ -276,66 +323,125 @@ const FlowDiagram = () => {
   const makeNodesEquispacedAndCentered = useCallback(() => {
     if (!reactFlowWrapper.current) return;
   
-    const spacingX = 200;
-    const spacingY = 250;
+    // Get container dimensions
     const containerWidth = reactFlowWrapper.current.offsetWidth;
-    const centerX = containerWidth / 2;
+    const containerHeight = reactFlowWrapper.current.offsetHeight;
   
-    // Helper function to get children of a node
-    const getChildren = (parentId) => {
-      return edges
+    // Helper functions for tree traversal
+    const getChildren = (parentId) => 
+      edges
         .filter((edge) => edge.source === parentId)
         .map((edge) => nodes.find((node) => node.id === edge.target));
-    };
-
-    // Helper function to get parents of a node
-    const getParents = (nodeId) => {
-      return edges
+  
+    const getParents = (nodeId) =>
+      edges
         .filter((edge) => edge.target === nodeId)
         .map((edge) => nodes.find((node) => node.id === edge.source));
+  
+    // Calculate node dimensions including padding
+    const calculateNodeDimensions = (nodes) => {
+      const defaultNodeWidth = 150;  // Adjust based on your nodes
+      const defaultNodeHeight = 50;
+      const horizontalPadding = 50;  // Minimum space between nodes
+      const verticalPadding = 75;    // Minimum space between levels
+  
+      return {
+        nodeWidth: defaultNodeWidth + horizontalPadding,
+        nodeHeight: defaultNodeHeight + verticalPadding
+      };
     };
   
-    const updatedNodes = [];
-    
-    // Find nodes at each level
+    // Get levels with optimized breadth-first traversal
     const getLevels = () => {
       const levels = [];
-      let currentNodes = nodes.filter(
+      const visited = new Set();
+      
+      // Find root nodes (nodes with no parents)
+      let currentLevel = nodes.filter(
         (node) => !edges.some((edge) => edge.target === node.id)
       );
-      
-      while (currentNodes.length > 0) {
-        levels.push(currentNodes);
-        currentNodes = currentNodes
+  
+      while (currentLevel.length > 0) {
+        levels.push(currentLevel);
+        
+        // Get next level nodes
+        const nextLevel = currentLevel
           .flatMap((node) => getChildren(node.id))
-          .filter((node, index, self) => 
-            self.findIndex(n => n.id === node.id) === index
-          );
+          .filter((node) => node && !visited.has(node.id));
+        
+        // Mark current level nodes as visited
+        currentLevel.forEach((node) => visited.add(node.id));
+        
+        currentLevel = nextLevel;
       }
+  
       return levels;
     };
-
-    const levels = getLevels();
-    
-    // Position nodes level by level
-    levels.forEach((levelNodes, levelIndex) => {
-      const levelWidth = (levelNodes.length - 1) * spacingX;
-      const startX = centerX - levelWidth / 2;
+  
+    // Calculate optimal spacing based on container and number of nodes
+    const calculateOptimalSpacing = (levels) => {
+      const { nodeWidth, nodeHeight } = calculateNodeDimensions(nodes);
       
-      levelNodes.forEach((node, nodeIndex) => {
-        updatedNodes.push({
-          ...node,
-          position: {
-            x: startX + nodeIndex * spacingX,
-            y: levelIndex * spacingY
+      // Find the level with maximum nodes to determine horizontal spacing
+      const maxNodesInLevel = Math.max(...levels.map(level => level.length));
+      
+      // Calculate spacing that will fit all nodes
+      const horizontalSpacing = Math.min(
+        Math.max(nodeWidth * 1.5, containerWidth / (maxNodesInLevel + 1)),
+        containerWidth / 2
+      );
+      
+      const verticalSpacing = Math.min(
+        Math.max(nodeHeight * 1.5, containerHeight / (levels.length + 1)),
+        containerHeight / 2
+      );
+  
+      return { horizontalSpacing, verticalSpacing };
+    };
+  
+    // Position nodes with dynamic spacing
+    const positionNodes = (levels) => {
+      const { horizontalSpacing, verticalSpacing } = calculateOptimalSpacing(levels);
+      const updatedNodes = [];
+  
+      levels.forEach((levelNodes, levelIndex) => {
+        const levelWidth = (levelNodes.length - 1) * horizontalSpacing;
+        const startX = (containerWidth - levelWidth) / 2;
+  
+        levelNodes.forEach((node, nodeIndex) => {
+          // Calculate base position
+          let xPos = startX + nodeIndex * horizontalSpacing;
+          let yPos = levelIndex * verticalSpacing;
+  
+          // Adjust position based on parent nodes for better alignment
+          const parents = getParents(node.id);
+          if (parents.length > 0) {
+            const parentX = parents.reduce((sum, parent) => {
+              const parentNode = updatedNodes.find(n => n.id === parent.id);
+              return sum + (parentNode ? parentNode.position.x : 0);
+            }, 0) / parents.length;
+  
+            // Weight the position between grid alignment and parent alignment
+            xPos = (xPos * 0.6) + (parentX * 0.4);
           }
+  
+          updatedNodes.push({
+            ...node,
+            position: { x: xPos, y: yPos }
+          });
         });
       });
-    });
   
+      return updatedNodes;
+    };
+  
+    // Execute the layout
+    const levels = getLevels();
+    const updatedNodes = positionNodes(levels);
+    
     pushToHistory(updatedNodes, edges);
     setNodes(updatedNodes);
-}, [nodes, edges, pushToHistory]);
+  }, [nodes, edges, pushToHistory]);
 
   const undo = useCallback(() => {
     if (currentHistoryIndex === 0) return;
