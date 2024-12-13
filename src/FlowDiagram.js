@@ -142,13 +142,30 @@ const FlowDiagram = () => {
       return edges.filter(edge => edge.target === nodeId).length;
     }
   
-    // Helper to check if a node has a circular parent
-    function hasCircularParent(nodeId) {
-      const parentEdges = edges.filter(edge => edge.target === nodeId);
-      if (parentEdges.length === 0) return false;
+    // Updated helper to check if a node has a circular ancestor
+    function hasCircularAncestor(nodeId, visited = new Set()) {
+      // Prevent infinite recursion
+      if (visited.has(nodeId)) return false;
+      visited.add(nodeId);
       
-      const parentNode = nodes.find(node => node.id === parentEdges[0].source);
-      return parentNode?.type === 'circular';
+      // Get all incoming edges to this node
+      const parentEdges = edges.filter(edge => edge.target === nodeId);
+      
+      for (const edge of parentEdges) {
+        const parentNode = nodes.find(node => node.id === edge.source);
+        
+        // If parent is circular, we found what we're looking for
+        if (parentNode?.type === 'circular') {
+          return true;
+        }
+        
+        // Recursively check parent's ancestors
+        if (hasCircularAncestor(edge.source, visited)) {
+          return true;
+        }
+      }
+      
+      return false;
     }
   
     // Helper to check if node is already connected to a circular node as output
@@ -189,10 +206,10 @@ const FlowDiagram = () => {
       return true;
     }
   
-    // Rule 4: Non-circular nodes can only connect to circular nodes if they have a circular parent
+    // Rule 4: Non-circular nodes can only connect to circular nodes if they have a circular ancestor
     if (sourceNode.type !== 'circular' && targetNode.type === 'circular') {
-      if (!hasCircularParent(sourceNode.id)) {
-        alert("Node must have a circular parent to connect to another circular node.");
+      if (!hasCircularAncestor(sourceNode.id)) {
+        alert("Node must have a circular ancestor to connect to another circular node.");
         return true;
       }
     }
