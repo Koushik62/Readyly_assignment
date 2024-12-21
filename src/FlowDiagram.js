@@ -9,18 +9,6 @@ import CustomNodeComponent from './customNodes/CustomNodeComponent';
 import IconNode from './customNodes/IconNode';
 import myImage from './logo_1.png';
 
-import {
-  Plus, Undo, Redo, Layout, Image, Circle, 
-  Icons, Square, Save, Download, Upload,
-  ZoomIn, ZoomOut, Maximize, Minimize
-} from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 const FlowDiagram = () => {
   const { nodes, edges, setNodes, setEdges, history, currentHistoryIndex,
     setHistory,setCurrentHistoryIndex } = useFlow();
@@ -73,17 +61,35 @@ const FlowDiagram = () => {
   
       let updatedNodes = [...nodes];
   
+      // Find the root circular node by traversing up the parent chain
+      const findRootCircular = (nodeId) => {
+        const nodeInfo = branchTracker.current[nodeId];
+        if (!nodeInfo) return null;
+        
+        if (nodes.find(n => n.id === nodeId)?.type === 'circular') {
+          return nodeId;
+        }
+        
+        return nodeInfo.parent ? findRootCircular(nodeInfo.parent) : null;
+      };
+
       // Determine the source node's branch ID
       if (!branchTracker.current[source] && sourceNode.type === 'circular') {
         // If source node has no branch, assign it a root branch
         branchTracker.current[source] = { parent: null, branchId: `${circularNodesIdx.current}` };
-        circularNodesIdx.current+=1;
+        circularNodesIdx.current += 1;
       }
   
-      const sourceBranchId = branchTracker.current[source].branchId;
-  
+      const sourceBranchId = branchTracker.current[source]?.branchId;
+      
+      // Find the root circular node for this connection
+      const rootCircularId = sourceNode.type === 'circular' 
+        ? source 
+        : findRootCircular(source);
+
       // Construct the target node's branch ID based on the source
       let newBranchId = sourceBranchId;
+      
       if (!branchTracker.current[target]) {
         // Count children of the source to determine the next number in the hierarchy
         const siblingCount = Object.values(branchTracker.current).filter(
@@ -92,8 +98,12 @@ const FlowDiagram = () => {
   
         newBranchId = `${sourceBranchId}.${siblingCount + 1}`;
   
-        // Assign the new branch ID and track the parent-child relationship
-        branchTracker.current[target] = { parent: source, branchId: newBranchId };
+        // Assign the new branch ID and track both immediate parent and root circular
+        branchTracker.current[target] = { 
+          parent: source,
+          rootCircular: rootCircularId,
+          branchId: newBranchId 
+        };
       }
   
       // Update the source and target node labels
@@ -121,7 +131,7 @@ const FlowDiagram = () => {
             ...node,
             data: {
               ...node.data,
-              branch: `${newBranchId}`, // Update target node label
+              branch: `${newBranchId}`,
             },
           };
         }
@@ -139,7 +149,7 @@ const FlowDiagram = () => {
         },
       ]);
   
-      console.log("Branch Tracker:", branchTracker.current); // Debugging output
+      console.log("Branch Tracker:", branchTracker.current);
     },
     [nodes, edges, setNodes, setEdges]
   );
@@ -154,13 +164,22 @@ const FlowDiagram = () => {
       return edges.filter(edge => edge.target === nodeId).length;
     }
   
-    // Helper to check if a node has a circular parent
-    function hasCircularParent(nodeId) {
+    // Helper to check if a node has a circular ancestor (recursive)
+    function hasCircularAncestor(nodeId, visited = new Set()) {
+      // Prevent infinite recursion
+      if (visited.has(nodeId)) return false;
+      visited.add(nodeId);
+      
+      // Check if current node is circular
+      const currentNode = nodes.find(node => node.id === nodeId);
+      if (currentNode?.type === 'circular') return true;
+      
+      // Get parent edges
       const parentEdges = edges.filter(edge => edge.target === nodeId);
       if (parentEdges.length === 0) return false;
       
-      const parentNode = nodes.find(node => node.id === parentEdges[0].source);
-      return parentNode?.type === 'circular';
+      // Recursively check parents
+      return parentEdges.some(edge => hasCircularAncestor(edge.source, visited));
     }
   
     // Rule 1: Prevent loops
@@ -192,10 +211,10 @@ const FlowDiagram = () => {
       return true;
     }
   
-    // Rule 4: Non-circular nodes can only connect to circular nodes if they have a circular parent
+    // Rule 4: Non-circular nodes can only connect to circular nodes if they have a circular ancestor
     if (sourceNode.type !== 'circular' && targetNode.type === 'circular') {
-      if (!hasCircularParent(sourceNode.id)) {
-        alert("Node must have a circular parent to connect to another circular node.");
+      if (!hasCircularAncestor(sourceNode.id)) {
+        alert("Node must have a circular ancestor to connect to another circular node.");
         return true;
       }
     }
