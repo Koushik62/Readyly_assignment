@@ -362,11 +362,11 @@ const FlowDiagram = () => {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'center', padding: '10px', gap: '10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
-        <button style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={makeNodesEquispacedAndCentered}>Equispace Nodes</button>
-        <button style={{ backgroundColor: '#f44336', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={undo}>Undo</button>
-        <button style={{ backgroundColor: '#008CBA', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={redo}>Redo</button>
-        <button style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={() => addNode('circular')}>Add Circular Node</button>
-        <button style={{ backgroundColor: '#3f51b5', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={() => addNode('imageNode')}>Add Image Node</button>
+        <button style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '10px', cursor: 'pointer', borderRadius: '10px' }} onClick={makeNodesEquispacedAndCentered}>Equispace Nodes</button>
+        <button style={{ backgroundColor: '#f44336', color: 'white', border: 'none', padding: '10px', cursor: 'pointer', borderRadius: '10px' }} onClick={undo}>Undo</button>
+        <button style={{ backgroundColor: '#008CBA', color: 'white', border: 'none', padding: '10px', cursor: 'pointer', borderRadius: '10px' }} onClick={redo}>Redo</button>
+        <button style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', padding: '10px', cursor: 'pointer', borderRadius: '10px' }} onClick={() => addNode('circular')}>Add Circular Node</button>
+        <button style={{ backgroundColor: '#3f51b5', color: 'white', border: 'none', padding: '10px', cursor: 'pointer', borderRadius: '10px' }} onClick={() => addNode('imageNode')}>Add Image Node</button>
       </div>
       <div ref={reactFlowWrapper} style={{ flex: 1, backgroundColor: '#fafafa', position: 'relative' }}>
         <div style={{
