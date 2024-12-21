@@ -361,23 +361,29 @@ const FlowDiagram = () => {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ justifyContent: 'space-evenly', padding: '10px' }}>
-        <button onClick={makeNodesEquispacedAndCentered}>Equispace Nodes</button>
-        <button onClick={undo}>Undo</button>
-        <button onClick={redo}>Redo</button>
-        <button onClick={() => addNode('circular')}>Add Circular Node</button>
-        <button onClick={() => addNode('iconNode')}>Add ICON Node</button>
-        <button onClick={() => addNode('imageNode')}>Add Image Node</button>
-        <button onClick={() => addNode('default')}>Add Default Node</button>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '10px', gap: '10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
+        <button style={{ backgroundColor: '#4CAF50', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={makeNodesEquispacedAndCentered}>Equispace Nodes</button>
+        <button style={{ backgroundColor: '#f44336', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={undo}>Undo</button>
+        <button style={{ backgroundColor: '#008CBA', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={redo}>Redo</button>
+        <button style={{ backgroundColor: '#ff9800', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={() => addNode('circular')}>Add Circular Node</button>
+        <button style={{ backgroundColor: '#3f51b5', color: 'white', border: 'none', padding: '10px 20px', cursor: 'pointer' }} onClick={() => addNode('imageNode')}>Add Image Node</button>
       </div>
-      <div ref={reactFlowWrapper} style={{ height: '100vh' }}>
+      <div ref={reactFlowWrapper} style={{ flex: 1, backgroundColor: '#fafafa', position: 'relative' }}>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundSize: '20px 20px',
+          backgroundImage: 'radial-gradient(circle, #e0e0e0 1.1px, transparent 1px)'
+        }} />
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           onNodeDragStop={onNodeDragStop}
-        // other props
         >
           <MiniMap />
           <Controls />
